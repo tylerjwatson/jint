@@ -19,7 +19,8 @@ namespace Jint.Runtime.Interop
 
         public override JsValue Call(JsValue thisObject, JsValue[] arguments)
         {
-            _setter(thisObject, arguments[0]);
+			lock (Engine._syncRoot)
+            	_setter(thisObject, arguments[0]);
             
             return Null.Instance;
         }

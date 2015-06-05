@@ -55,63 +55,51 @@ namespace Jint.Native.Function
         /// <param name="arguments"></param>
         /// <returns></returns>
         public override JsValue Call(JsValue thisArg, JsValue[] arguments)
-        {
-            using (new StrictModeScope(Strict, true))
-            {
-                // setup new execution context http://www.ecma-international.org/ecma-262/5.1/#sec-10.4.3
-                JsValue thisBinding;
-                if (StrictModeScope.IsStrictModeCode)
-                {
-                    thisBinding = thisArg;
-                }
-                else if (thisArg == Undefined.Instance || thisArg == Null.Instance)
-                {
-                    thisBinding = Engine.Global;
-                }
-                else if (!thisArg.IsObject())
-                {
-                    thisBinding = TypeConverter.ToObject(Engine, thisArg);
-                }
-                else
-                {
-                    thisBinding = thisArg;
-                }
+		{
+			lock (Engine._syncRoot)
+				using (new StrictModeScope(Strict, true)) {
+					// setup new execution context http://www.ecma-international.org/ecma-262/5.1/#sec-10.4.3
+					JsValue thisBinding;
+					if (StrictModeScope.IsStrictModeCode) {
+						thisBinding = thisArg;
+					} else if (thisArg == Undefined.Instance || thisArg == Null.Instance) {
+						thisBinding = Engine.Global;
+					} else if (!thisArg.IsObject()) {
+						thisBinding = TypeConverter.ToObject(Engine, thisArg);
+					} else {
+						thisBinding = thisArg;
+					}
 
-                var localEnv = LexicalEnvironment.NewDeclarativeEnvironment(Engine, Scope);
+					var localEnv = LexicalEnvironment.NewDeclarativeEnvironment(Engine, Scope);
 
-                Engine.EnterExecutionContext(localEnv, localEnv, thisBinding);
+					Engine.EnterExecutionContext(localEnv, localEnv, thisBinding);
 
-                try
-                {
-                    Engine.DeclarationBindingInstantiation(
-                        DeclarationBindingType.FunctionCode,
-                        _functionDeclaration.FunctionDeclarations, 
-                        _functionDeclaration.VariableDeclarations, 
-                        this,
-                        arguments);
+					try {
+						Engine.DeclarationBindingInstantiation(
+							DeclarationBindingType.FunctionCode,
+							_functionDeclaration.FunctionDeclarations, 
+							_functionDeclaration.VariableDeclarations, 
+							this,
+							arguments);
 
-                    var result = Engine.ExecuteStatement(_functionDeclaration.Body);
+						var result = Engine.ExecuteStatement(_functionDeclaration.Body);
 
-                    if (result.Type == Completion.Throw)
-                    {
-                        JavaScriptException ex = new JavaScriptException(result.GetValueOrDefault());
-                        ex.Location = result.Location;
-                        throw ex;
-                    }
+						if (result.Type == Completion.Throw) {
+							JavaScriptException ex = new JavaScriptException(result.GetValueOrDefault());
+							ex.Location = result.Location;
+							throw ex;
+						}
 
-                    if (result.Type == Completion.Return)
-                    {
-                        return result.GetValueOrDefault();
-                    }
-                }
-                finally
-                {
-                    Engine.LeaveExecutionContext();
-                }
+						if (result.Type == Completion.Return) {
+							return result.GetValueOrDefault();
+						}
+					} finally {
+						Engine.LeaveExecutionContext();
+					}
 
-                return Undefined.Instance;
-            }
-        }
+					return Undefined.Instance;
+				}
+		}
 
         /// <summary>
         /// http://www.ecma-international.org/ecma-262/5.1/#sec-13.2.2

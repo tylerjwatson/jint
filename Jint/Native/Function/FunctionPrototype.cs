@@ -126,7 +126,9 @@ namespace Jint.Native.Function
                 throw new JavaScriptException(Engine.TypeError);
             }
 
-            return func.Call(arguments.At(0), arguments.Length == 0 ? arguments : arguments.Skip(1).ToArray());
+			lock (Engine._syncRoot) {
+				return func.Call(arguments.At(0), arguments.Length == 0 ? arguments : arguments.Skip(1).ToArray());
+			}
         }
 
         public override JsValue Call(JsValue thisObject, JsValue[] arguments)

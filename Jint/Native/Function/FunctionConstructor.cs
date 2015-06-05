@@ -42,7 +42,9 @@ namespace Jint.Native.Function
 
         public override JsValue Call(JsValue thisObject, JsValue[] arguments)
         {
-            return Construct(arguments);
+			lock (Engine._syncRoot) {
+				return Construct(arguments);
+			}
         }
 
         private string[] ParseArgumentNames(string parameterDeclaration)

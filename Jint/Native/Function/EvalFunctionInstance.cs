@@ -33,6 +33,8 @@ namespace Jint.Native.Function
             {
                 var parser = new JavaScriptParser(StrictModeScope.IsStrictModeCode);
                 var program = parser.Parse(code);
+
+				lock(_engine._syncRoot)
                 using (new StrictModeScope(program.Strict))
                 {
                     using (new EvalCodeScope())

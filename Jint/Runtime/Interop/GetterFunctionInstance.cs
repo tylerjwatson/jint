@@ -19,7 +19,8 @@ namespace Jint.Runtime.Interop
 
         public override JsValue Call(JsValue thisObject, JsValue[] arguments)
         {
-            return _getter(thisObject);
+			lock (Engine._syncRoot)
+				return _getter(thisObject);
         }
     }
 }

@@ -26,15 +26,14 @@ namespace Jint.Runtime.Interop
 
         public override JsValue Call(JsValue thisObject, JsValue[] arguments)
         {
-            try
-            {
-                var result = _func(thisObject, arguments);
-                return result;
-            }
-            catch (InvalidCastException)
-            {
-                throw new JavaScriptException(Engine.TypeError);
-            }
+			lock (Engine._syncRoot) {
+				try {
+					var result = _func(thisObject, arguments);
+					return result;
+				} catch (InvalidCastException) {
+					throw new JavaScriptException(Engine.TypeError);
+				}
+			}
         }
     }
 }

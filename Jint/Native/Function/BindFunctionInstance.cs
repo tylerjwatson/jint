@@ -18,12 +18,13 @@ namespace Jint.Native.Function
 
         public override JsValue Call(JsValue thisObject, JsValue[] arguments)
         {
-            var f = TargetFunction.TryCast<FunctionInstance>(x =>
-            {
-                throw new JavaScriptException(Engine.TypeError);
-            });
+			lock (Engine._syncRoot) {
+				var f = TargetFunction.TryCast<FunctionInstance>(x => {
+					throw new JavaScriptException(Engine.TypeError);
+				});
 
-            return f.Call(BoundThis, BoundArgs.Union(arguments).ToArray());
+				return f.Call(BoundThis, BoundArgs.Union(arguments).ToArray());
+			}
         }
 
         public ObjectInstance Construct(JsValue[] arguments)

@@ -44,6 +44,8 @@ namespace Jint
 
         internal JintCallStack CallStack = new JintCallStack();
 
+		internal readonly object _syncRoot = new object();
+
         public Engine() : this(null)
         {
         }
@@ -214,7 +216,8 @@ namespace Jint
 
         public void LeaveExecutionContext()
         {
-            _executionContexts.Pop();
+			lock (_syncRoot)
+            	_executionContexts.Pop();
         }
 
         /// <summary>
@@ -222,7 +225,8 @@ namespace Jint
         /// </summary>
         public void ResetStatementsCount()
         {
-            _statementsCount = 0;
+			lock (_syncRoot)
+            	_statementsCount = 0;
         }
         
         public void ResetTimeoutTicks()
@@ -236,7 +240,8 @@ namespace Jint
         /// </summary>
         public void ResetCallStack()
         {
-            CallStack.Clear();
+			lock (_syncRoot)
+            	CallStack.Clear();
         }
 
         public Engine Execute(string source)
@@ -258,25 +263,27 @@ namespace Jint
             ResetLastStatement();
             ResetCallStack();
 
-            using (new StrictModeScope(Options.IsStrict() || program.Strict))
-            {
-                DeclarationBindingInstantiation(DeclarationBindingType.GlobalCode, program.FunctionDeclarations, program.VariableDeclarations, null, null);
+			lock (_syncRoot)
+	            using (new StrictModeScope(Options.IsStrict() || program.Strict))
+	            {
+	                DeclarationBindingInstantiation(DeclarationBindingType.GlobalCode, program.FunctionDeclarations, program.VariableDeclarations, null, null);
 
-                var result = _statements.ExecuteProgram(program);
-                if (result.Type == Completion.Throw)
-                {
-                    throw new JavaScriptException(result.GetValueOrDefault());
-                }
+	                var result = _statements.ExecuteProgram(program);
+	                if (result.Type == Completion.Throw)
+	                {
+	                    throw new JavaScriptException(result.GetValueOrDefault());
+	                }
 
-                _completionValue = result.GetValueOrDefault();
-            }
+	                _completionValue = result.GetValueOrDefault();
+	            }
 
             return this;
         }
 
         private void ResetLastStatement()
         {
-            _lastSyntaxNode = null;
+			lock (_syncRoot)
+            	_lastSyntaxNode = null;
         }
 
         /// <summary>
@@ -284,151 +291,152 @@ namespace Jint
         /// </summary>
         public JsValue GetCompletionValue()
         {
-            return _completionValue;
+			lock (_syncRoot)
+            	return _completionValue;
         }
 
         public Completion ExecuteStatement(Statement statement)
         {
-            var maxStatements = Options.GetMaxStatements();
-            if (maxStatements > 0 && _statementsCount++ > maxStatements)
-            {
-                throw new StatementsCountOverflowException();
-            }
+			lock (_syncRoot) {
+				var maxStatements = Options.GetMaxStatements();
+				if (maxStatements > 0 && _statementsCount++ > maxStatements) {
+					throw new StatementsCountOverflowException();
+				}
 
-            if (_timeoutTicks > 0 && _timeoutTicks < DateTime.UtcNow.Ticks)
-            {
-                throw new TimeoutException();
-            }
+				if (_timeoutTicks > 0 && _timeoutTicks < DateTime.UtcNow.Ticks) {
+					throw new TimeoutException();
+				}
 
-            _lastSyntaxNode = statement;
+				_lastSyntaxNode = statement;
 
-            switch (statement.Type)
-            {
-                case SyntaxNodes.BlockStatement:
-                    return _statements.ExecuteBlockStatement(statement.As<BlockStatement>());
+				switch (statement.Type) {
+					case SyntaxNodes.BlockStatement:
+						return _statements.ExecuteBlockStatement(statement.As<BlockStatement>());
                     
-                case SyntaxNodes.BreakStatement:
-                    return _statements.ExecuteBreakStatement(statement.As<BreakStatement>());
+					case SyntaxNodes.BreakStatement:
+						return _statements.ExecuteBreakStatement(statement.As<BreakStatement>());
                     
-                case SyntaxNodes.ContinueStatement:
-                    return _statements.ExecuteContinueStatement(statement.As<ContinueStatement>());
+					case SyntaxNodes.ContinueStatement:
+						return _statements.ExecuteContinueStatement(statement.As<ContinueStatement>());
                     
-                case SyntaxNodes.DoWhileStatement:
-                    return _statements.ExecuteDoWhileStatement(statement.As<DoWhileStatement>());
+					case SyntaxNodes.DoWhileStatement:
+						return _statements.ExecuteDoWhileStatement(statement.As<DoWhileStatement>());
                     
-                case SyntaxNodes.DebuggerStatement:
-                    return _statements.ExecuteDebuggerStatement(statement.As<DebuggerStatement>());
+					case SyntaxNodes.DebuggerStatement:
+						return _statements.ExecuteDebuggerStatement(statement.As<DebuggerStatement>());
                     
-                case SyntaxNodes.EmptyStatement:
-                    return _statements.ExecuteEmptyStatement(statement.As<EmptyStatement>());
+					case SyntaxNodes.EmptyStatement:
+						return _statements.ExecuteEmptyStatement(statement.As<EmptyStatement>());
                     
-                case SyntaxNodes.ExpressionStatement:
-                    return _statements.ExecuteExpressionStatement(statement.As<ExpressionStatement>());
+					case SyntaxNodes.ExpressionStatement:
+						return _statements.ExecuteExpressionStatement(statement.As<ExpressionStatement>());
 
-                case SyntaxNodes.ForStatement:
-                    return _statements.ExecuteForStatement(statement.As<ForStatement>());
+					case SyntaxNodes.ForStatement:
+						return _statements.ExecuteForStatement(statement.As<ForStatement>());
                     
-                case SyntaxNodes.ForInStatement:
-                    return _statements.ExecuteForInStatement(statement.As<ForInStatement>());
+					case SyntaxNodes.ForInStatement:
+						return _statements.ExecuteForInStatement(statement.As<ForInStatement>());
 
-                case SyntaxNodes.FunctionDeclaration:
-                    return new Completion(Completion.Normal, null, null);
+					case SyntaxNodes.FunctionDeclaration:
+						return new Completion(Completion.Normal, null, null);
                     
-                case SyntaxNodes.IfStatement:
-                    return _statements.ExecuteIfStatement(statement.As<IfStatement>());
+					case SyntaxNodes.IfStatement:
+						return _statements.ExecuteIfStatement(statement.As<IfStatement>());
                     
-                case SyntaxNodes.LabeledStatement:
-                    return _statements.ExecuteLabelledStatement(statement.As<LabelledStatement>());
+					case SyntaxNodes.LabeledStatement:
+						return _statements.ExecuteLabelledStatement(statement.As<LabelledStatement>());
 
-                case SyntaxNodes.ReturnStatement:
-                    return _statements.ExecuteReturnStatement(statement.As<ReturnStatement>());
+					case SyntaxNodes.ReturnStatement:
+						return _statements.ExecuteReturnStatement(statement.As<ReturnStatement>());
                     
-                case SyntaxNodes.SwitchStatement:
-                    return _statements.ExecuteSwitchStatement(statement.As<SwitchStatement>());
+					case SyntaxNodes.SwitchStatement:
+						return _statements.ExecuteSwitchStatement(statement.As<SwitchStatement>());
                     
-                case SyntaxNodes.ThrowStatement:
-                    return _statements.ExecuteThrowStatement(statement.As<ThrowStatement>());
+					case SyntaxNodes.ThrowStatement:
+						return _statements.ExecuteThrowStatement(statement.As<ThrowStatement>());
 
-                case SyntaxNodes.TryStatement:
-                    return _statements.ExecuteTryStatement(statement.As<TryStatement>());
+					case SyntaxNodes.TryStatement:
+						return _statements.ExecuteTryStatement(statement.As<TryStatement>());
                     
-                case SyntaxNodes.VariableDeclaration:
-                    return _statements.ExecuteVariableDeclaration(statement.As<VariableDeclaration>());
+					case SyntaxNodes.VariableDeclaration:
+						return _statements.ExecuteVariableDeclaration(statement.As<VariableDeclaration>());
                     
-                case SyntaxNodes.WhileStatement:
-                    return _statements.ExecuteWhileStatement(statement.As<WhileStatement>());
+					case SyntaxNodes.WhileStatement:
+						return _statements.ExecuteWhileStatement(statement.As<WhileStatement>());
                     
-                case SyntaxNodes.WithStatement:
-                    return _statements.ExecuteWithStatement(statement.As<WithStatement>());
+					case SyntaxNodes.WithStatement:
+						return _statements.ExecuteWithStatement(statement.As<WithStatement>());
 
-                case SyntaxNodes.Program:
-                    return _statements.ExecuteProgram(statement.As<Program>());
+					case SyntaxNodes.Program:
+						return _statements.ExecuteProgram(statement.As<Program>());
                     
-                default:
-                    throw new ArgumentOutOfRangeException();
-            }
+					default:
+						throw new ArgumentOutOfRangeException();
+				}
+			}
         }
 
         public object EvaluateExpression(Expression expression)
         {
-            _lastSyntaxNode = expression;
+			lock (_syncRoot) {
+				_lastSyntaxNode = expression;
 
-            switch (expression.Type)
-            {
-                case SyntaxNodes.AssignmentExpression:
-                    return _expressions.EvaluateAssignmentExpression(expression.As<AssignmentExpression>());
+				switch (expression.Type) {
+					case SyntaxNodes.AssignmentExpression:
+						return _expressions.EvaluateAssignmentExpression(expression.As<AssignmentExpression>());
 
-                case SyntaxNodes.ArrayExpression:
-                    return _expressions.EvaluateArrayExpression(expression.As<ArrayExpression>());
+					case SyntaxNodes.ArrayExpression:
+						return _expressions.EvaluateArrayExpression(expression.As<ArrayExpression>());
 
-                case SyntaxNodes.BinaryExpression:
-                    return _expressions.EvaluateBinaryExpression(expression.As<BinaryExpression>());
+					case SyntaxNodes.BinaryExpression:
+						return _expressions.EvaluateBinaryExpression(expression.As<BinaryExpression>());
 
-                case SyntaxNodes.CallExpression:
-                    return _expressions.EvaluateCallExpression(expression.As<CallExpression>());
+					case SyntaxNodes.CallExpression:
+						return _expressions.EvaluateCallExpression(expression.As<CallExpression>());
 
-                case SyntaxNodes.ConditionalExpression:
-                    return _expressions.EvaluateConditionalExpression(expression.As<ConditionalExpression>());
+					case SyntaxNodes.ConditionalExpression:
+						return _expressions.EvaluateConditionalExpression(expression.As<ConditionalExpression>());
 
-                case SyntaxNodes.FunctionExpression:
-                    return _expressions.EvaluateFunctionExpression(expression.As<FunctionExpression>());
+					case SyntaxNodes.FunctionExpression:
+						return _expressions.EvaluateFunctionExpression(expression.As<FunctionExpression>());
 
-                case SyntaxNodes.Identifier:
-                    return _expressions.EvaluateIdentifier(expression.As<Identifier>());
+					case SyntaxNodes.Identifier:
+						return _expressions.EvaluateIdentifier(expression.As<Identifier>());
 
-                case SyntaxNodes.Literal:
-                    return _expressions.EvaluateLiteral(expression.As<Literal>());
+					case SyntaxNodes.Literal:
+						return _expressions.EvaluateLiteral(expression.As<Literal>());
 
-                case SyntaxNodes.RegularExpressionLiteral:
-                    return _expressions.EvaluateLiteral(expression.As<Literal>());
+					case SyntaxNodes.RegularExpressionLiteral:
+						return _expressions.EvaluateLiteral(expression.As<Literal>());
 
-                case SyntaxNodes.LogicalExpression:
-                    return _expressions.EvaluateLogicalExpression(expression.As<LogicalExpression>());
+					case SyntaxNodes.LogicalExpression:
+						return _expressions.EvaluateLogicalExpression(expression.As<LogicalExpression>());
 
-                case SyntaxNodes.MemberExpression:
-                    return _expressions.EvaluateMemberExpression(expression.As<MemberExpression>());
+					case SyntaxNodes.MemberExpression:
+						return _expressions.EvaluateMemberExpression(expression.As<MemberExpression>());
 
-                case SyntaxNodes.NewExpression:
-                    return _expressions.EvaluateNewExpression(expression.As<NewExpression>());
+					case SyntaxNodes.NewExpression:
+						return _expressions.EvaluateNewExpression(expression.As<NewExpression>());
 
-                case SyntaxNodes.ObjectExpression:
-                    return _expressions.EvaluateObjectExpression(expression.As<ObjectExpression>());
+					case SyntaxNodes.ObjectExpression:
+						return _expressions.EvaluateObjectExpression(expression.As<ObjectExpression>());
 
-                case SyntaxNodes.SequenceExpression:
-                    return _expressions.EvaluateSequenceExpression(expression.As<SequenceExpression>());
+					case SyntaxNodes.SequenceExpression:
+						return _expressions.EvaluateSequenceExpression(expression.As<SequenceExpression>());
 
-                case SyntaxNodes.ThisExpression:
-                    return _expressions.EvaluateThisExpression(expression.As<ThisExpression>());
+					case SyntaxNodes.ThisExpression:
+						return _expressions.EvaluateThisExpression(expression.As<ThisExpression>());
 
-                case SyntaxNodes.UpdateExpression:
-                    return _expressions.EvaluateUpdateExpression(expression.As<UpdateExpression>());
+					case SyntaxNodes.UpdateExpression:
+						return _expressions.EvaluateUpdateExpression(expression.As<UpdateExpression>());
 
-                case SyntaxNodes.UnaryExpression:
-                    return _expressions.EvaluateUnaryExpression(expression.As<UnaryExpression>());
+					case SyntaxNodes.UnaryExpression:
+						return _expressions.EvaluateUnaryExpression(expression.As<UnaryExpression>());
 
-                default:
-                    throw new ArgumentOutOfRangeException();
-            }
+					default:
+						throw new ArgumentOutOfRangeException();
+				}
+			}
         }
 
         /// <summary>
@@ -438,69 +446,58 @@ namespace Jint
         /// <returns></returns>
         public JsValue GetValue(object value)
         {
-            var reference = value as Reference;
+			lock (_syncRoot) {
+				var reference = value as Reference;
 
-            if (reference == null)
-            {
-                var completion = value as Completion;
+				if (reference == null) {
+					var completion = value as Completion;
 
-                if (completion != null)
-                {
-                    return GetValue(completion.Value);
-                }
+					if (completion != null) {
+						return GetValue(completion.Value);
+					}
 
-                return (JsValue)value;
-            }
+					return (JsValue)value;
+				}
 
-            if (reference.IsUnresolvableReference())
-            {
-                throw new JavaScriptException(ReferenceError, reference.GetReferencedName() + " is not defined");
-            }
+				if (reference.IsUnresolvableReference()) {
+					throw new JavaScriptException(ReferenceError, reference.GetReferencedName() + " is not defined");
+				}
 
-            var baseValue = reference.GetBase();
+				var baseValue = reference.GetBase();
 
-            if (reference.IsPropertyReference())
-            {
-                if (reference.HasPrimitiveBase() == false)
-                {
-                    var o = TypeConverter.ToObject(this, baseValue);
-                    return o.Get(reference.GetReferencedName());
-                }
-                else
-                {
-                    var o = TypeConverter.ToObject(this, baseValue);
-                    var desc = o.GetProperty(reference.GetReferencedName());
-                    if (desc == PropertyDescriptor.Undefined)
-                    {
-                        return JsValue.Undefined;
-                    }
+				if (reference.IsPropertyReference()) {
+					if (reference.HasPrimitiveBase() == false) {
+						var o = TypeConverter.ToObject(this, baseValue);
+						return o.Get(reference.GetReferencedName());
+					} else {
+						var o = TypeConverter.ToObject(this, baseValue);
+						var desc = o.GetProperty(reference.GetReferencedName());
+						if (desc == PropertyDescriptor.Undefined) {
+							return JsValue.Undefined;
+						}
                     
-                    if (desc.IsDataDescriptor())
-                    {
-                        return desc.Value.Value;
-                    }
+						if (desc.IsDataDescriptor()) {
+							return desc.Value.Value;
+						}
 
-                    var getter = desc.Get.Value;
-                    if (getter == Undefined.Instance)
-                    {
-                        return Undefined.Instance;
-                    }
+						var getter = desc.Get.Value;
+						if (getter == Undefined.Instance) {
+							return Undefined.Instance;
+						}
 
-                    var callable = (ICallable)getter.AsObject();
-                    return callable.Call(baseValue, Arguments.Empty);
-                }
-            }
-            else
-            {
-                var record = baseValue.As<EnvironmentRecord>();
+						var callable = (ICallable)getter.AsObject();
+						return callable.Call(baseValue, Arguments.Empty);
+					}
+				} else {
+					var record = baseValue.As<EnvironmentRecord>();
 
-                if (record == null)
-                {
-                    throw new ArgumentException();
-                }
+					if (record == null) {
+						throw new ArgumentException();
+					}
 
-                return record.GetBindingValue(reference.GetReferencedName(), reference.IsStrict());    
-            }
+					return record.GetBindingValue(reference.GetReferencedName(), reference.IsStrict());    
+				}
+			}
         }
 
         /// <summary>
@@ -510,39 +507,31 @@ namespace Jint
         /// <param name="value"></param>
         public void PutValue(Reference reference, JsValue value)
         {
-            if (reference.IsUnresolvableReference())
-            {
-                if (reference.IsStrict())
-                {
-                    throw new JavaScriptException(ReferenceError);
-                }
+			lock (_syncRoot) {
+				if (reference.IsUnresolvableReference()) {
+					if (reference.IsStrict()) {
+						throw new JavaScriptException(ReferenceError);
+					}
 
-                Global.Put(reference.GetReferencedName(), value, false);
-            }
-            else if (reference.IsPropertyReference())
-            {
-                var baseValue = reference.GetBase();
-                if (!reference.HasPrimitiveBase())
-                {
-                    baseValue.AsObject().Put(reference.GetReferencedName(), value, reference.IsStrict());
-                }
-                else
-                {
-                    PutPrimitiveBase(baseValue, reference.GetReferencedName(), value, reference.IsStrict());
-                }
-            }
-            else
-            {
-                var baseValue = reference.GetBase();
-                var record = baseValue.As<EnvironmentRecord>();
+					Global.Put(reference.GetReferencedName(), value, false);
+				} else if (reference.IsPropertyReference()) {
+					var baseValue = reference.GetBase();
+					if (!reference.HasPrimitiveBase()) {
+						baseValue.AsObject().Put(reference.GetReferencedName(), value, reference.IsStrict());
+					} else {
+						PutPrimitiveBase(baseValue, reference.GetReferencedName(), value, reference.IsStrict());
+					}
+				} else {
+					var baseValue = reference.GetBase();
+					var record = baseValue.As<EnvironmentRecord>();
 
-                if (record == null)
-                {
-                    throw new ArgumentNullException();
-                }
+					if (record == null) {
+						throw new ArgumentNullException();
+					}
 
-                record.SetMutableBinding(reference.GetReferencedName(), value, reference.IsStrict());
-            }
+					record.SetMutableBinding(reference.GetReferencedName(), value, reference.IsStrict());
+				}
+			}
         }
 
         /// <summary>
@@ -553,44 +542,38 @@ namespace Jint
         /// <param name="value"></param>
         /// <param name="throwOnError"></param>
         public void PutPrimitiveBase(JsValue b, string name, JsValue value, bool throwOnError)
-        {
-            var o = TypeConverter.ToObject(this, b);
-            if (!o.CanPut(name))
-            {
-                if (throwOnError)
-                {
-                    throw new JavaScriptException(TypeError);
-                }
+        { 
+			lock (_syncRoot) {
+				var o = TypeConverter.ToObject(this, b);
+				if (!o.CanPut(name)) {
+					if (throwOnError) {
+						throw new JavaScriptException(TypeError);
+					}
 
-                return;
-            }
+					return;
+				}
 
-            var ownDesc = o.GetOwnProperty(name);
+				var ownDesc = o.GetOwnProperty(name);
 
-            if (ownDesc.IsDataDescriptor())
-            {
-                if (throwOnError)
-                {
-                    throw new JavaScriptException(TypeError);
-                }
+				if (ownDesc.IsDataDescriptor()) {
+					if (throwOnError) {
+						throw new JavaScriptException(TypeError);
+					}
 
-                return;
-            }
+					return;
+				}
 
-            var desc = o.GetProperty(name);
+				var desc = o.GetProperty(name);
 
-            if (desc.IsAccessorDescriptor())
-            {
-                var setter = (ICallable)desc.Set.Value.AsObject();
-                setter.Call(b, new[] { value });
-            }
-            else
-            {
-                if (throwOnError)
-                {
-                    throw new JavaScriptException(TypeError);
-                }
-            }
+				if (desc.IsAccessorDescriptor()) {
+					var setter = (ICallable)desc.Set.Value.AsObject();
+					setter.Call(b, new[] { value });
+				} else {
+					if (throwOnError) {
+						throw new JavaScriptException(TypeError);
+					}
+				}
+			}
         }
 
         /// <summary>
@@ -612,15 +595,16 @@ namespace Jint
         /// <returns>The value returned by the function call.</returns>
         public JsValue Invoke(string propertyName, object thisObj, object[] arguments)
         {
-            var value = GetValue(propertyName);
-            var callable = value.TryCast<ICallable>();
+			lock (_syncRoot) {
+				var value = GetValue(propertyName);
+				var callable = value.TryCast<ICallable>();
 
-            if (callable == null)
-            {
-                throw new ArgumentException("Can only invoke functions");
-            }
+				if (callable == null) {
+					throw new ArgumentException("Can only invoke functions");
+				}
 
-            return callable.Call(JsValue.FromObject(this, thisObj), arguments.Select(x => JsValue.FromObject(this, x)).ToArray());
+				return callable.Call(JsValue.FromObject(this, thisObj), arguments.Select(x => JsValue.FromObject(this, x)).ToArray());
+			}
         }
 
         /// <summary>
@@ -637,7 +621,8 @@ namespace Jint
         /// </summary>
         public SyntaxNode GetLastSyntaxNode()
         {
-            return _lastSyntaxNode;
+			lock (_syncRoot)
+            	return _lastSyntaxNode;
         }
 
         /// <summary>
