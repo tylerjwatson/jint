@@ -42,7 +42,7 @@ namespace Jint.Runtime.Interop
                 else
                 {
                     parameters[i] = Engine.ClrTypeConverter.Convert(
-                        jsArguments[i].ToObject(),
+                        jsArguments.ElementAtOrDefault(i).ToObject(),
                         parameterType,
                         CultureInfo.InvariantCulture);
                 }
