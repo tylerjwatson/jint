@@ -42,6 +42,8 @@ namespace Jint
         // cache of types used when resolving CLR type names
         internal Dictionary<string, Type> TypeCache = new Dictionary<string, Type>();
 
+        public object SyncRoot { get; set; } = new object();
+
         internal static Dictionary<Type, Func<Engine, object, JsValue>> TypeMappers = new Dictionary<Type, Func<Engine, object, JsValue>>()
         {
             { typeof(bool), (Engine engine, object v) => new JsValue((bool)v) },
@@ -221,11 +223,11 @@ namespace Jint
         public ExecutionContext EnterExecutionContext(LexicalEnvironment lexicalEnvironment, LexicalEnvironment variableEnvironment, JsValue thisBinding)
         {
             var executionContext = new ExecutionContext
-                {
-                    LexicalEnvironment = lexicalEnvironment,
-                    VariableEnvironment = variableEnvironment,
-                    ThisBinding = thisBinding
-                };
+            {
+                LexicalEnvironment = lexicalEnvironment,
+                VariableEnvironment = variableEnvironment,
+                ThisBinding = thisBinding
+            };
             _executionContexts.Push(executionContext);
 
             return executionContext;
@@ -304,26 +306,30 @@ namespace Jint
 
         public Engine Execute(Program program)
         {
-            ResetStatementsCount();
-            ResetTimeoutTicks();
-            ResetLastStatement();
-            ResetCallStack();
-
-            using (new StrictModeScope(Options._IsStrict || program.Strict))
+            lock (SyncRoot)
             {
-                DeclarationBindingInstantiation(DeclarationBindingType.GlobalCode, program.FunctionDeclarations, program.VariableDeclarations, null, null);
+                ResetStatementsCount();
+                ResetTimeoutTicks();
+                ResetLastStatement();
+                ResetCallStack();
 
-                var result = _statements.ExecuteProgram(program);
-                if (result.Type == Completion.Throw)
+                using (new StrictModeScope(Options._IsStrict || program.Strict))
                 {
-                    throw new JavaScriptException(result.GetValueOrDefault())
-                    {
-                        Location = result.Location
-                    };
-                }
+                    DeclarationBindingInstantiation(DeclarationBindingType.GlobalCode, program.FunctionDeclarations, program.VariableDeclarations, null, null);
 
-                _completionValue = result.GetValueOrDefault();
+                    var result = _statements.ExecuteProgram(program);
+                    if (result.Type == Completion.Throw)
+                    {
+                        throw new JavaScriptException(result.GetValueOrDefault())
+                        {
+                            Location = result.Location
+                        };
+                    }
+
+                    _completionValue = result.GetValueOrDefault();
+                }
             }
+
 
             return this;
         }

@@ -29,8 +29,11 @@ namespace Jint.Runtime.Interop
         {
             try
             {
-                var result = _func(thisObject, arguments);
-                return result;
+                lock (Engine.SyncRoot)
+                {
+                    var result = _func(thisObject, arguments);
+                    return result;
+                }
             }
             catch (InvalidCastException)
             {
